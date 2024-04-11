@@ -24128,6 +24128,658 @@
     }
   });
 
+  // packages/shared/render/plugins/Slider/webflow-slider.js
+  var require_webflow_slider = __commonJS({
+    "packages/shared/render/plugins/Slider/webflow-slider.js"(exports2, module2) {
+      "use strict";
+      var Webflow = require_webflow_lib();
+      var IXEvents = require_webflow_ix2_events();
+      var KEY_CODES = {
+        ARROW_LEFT: 37,
+        ARROW_UP: 38,
+        ARROW_RIGHT: 39,
+        ARROW_DOWN: 40,
+        SPACE: 32,
+        ENTER: 13,
+        HOME: 36,
+        END: 35
+      };
+      var FOCUSABLE_SELECTOR = 'a[href], area[href], [role="button"], input, select, textarea, button, iframe, object, embed, *[tabindex], *[contenteditable]';
+      Webflow.define("slider", module2.exports = function($, _) {
+        var api = {};
+        var tram = $.tram;
+        var $doc = $(document);
+        var $sliders;
+        var designer;
+        var inApp = Webflow.env();
+        var namespace = ".w-slider";
+        var dot = '<div class="w-slider-dot" data-wf-ignore />';
+        var ariaLiveLabelHtml = '<div aria-live="off" aria-atomic="true" class="w-slider-aria-label" data-wf-ignore />';
+        var forceShow = "w-slider-force-show";
+        var ix = IXEvents.triggers;
+        var fallback;
+        var inRedraw = false;
+        api.ready = function() {
+          designer = Webflow.env("design");
+          init2();
+        };
+        api.design = function() {
+          designer = true;
+          setTimeout(init2, 1e3);
+        };
+        api.preview = function() {
+          designer = false;
+          init2();
+        };
+        api.redraw = function() {
+          inRedraw = true;
+          init2();
+          inRedraw = false;
+        };
+        api.destroy = removeListeners;
+        function init2() {
+          $sliders = $doc.find(namespace);
+          if (!$sliders.length) {
+            return;
+          }
+          $sliders.each(build);
+          if (fallback) {
+            return;
+          }
+          removeListeners();
+          addListeners();
+        }
+        function removeListeners() {
+          Webflow.resize.off(renderAll);
+          Webflow.redraw.off(api.redraw);
+        }
+        function addListeners() {
+          Webflow.resize.on(renderAll);
+          Webflow.redraw.on(api.redraw);
+        }
+        function renderAll() {
+          $sliders.filter(":visible").each(render);
+        }
+        function build(i, el) {
+          var $el = $(el);
+          var data2 = $.data(el, namespace);
+          if (!data2) {
+            data2 = $.data(el, namespace, {
+              index: 0,
+              depth: 1,
+              hasFocus: {
+                keyboard: false,
+                mouse: false
+              },
+              el: $el,
+              config: {}
+            });
+          }
+          data2.mask = $el.children(".w-slider-mask");
+          data2.left = $el.children(".w-slider-arrow-left");
+          data2.right = $el.children(".w-slider-arrow-right");
+          data2.nav = $el.children(".w-slider-nav");
+          data2.slides = data2.mask.children(".w-slide");
+          data2.slides.each(ix.reset);
+          if (inRedraw) {
+            data2.maskWidth = 0;
+          }
+          if ($el.attr("role") === void 0) {
+            $el.attr("role", "region");
+          }
+          if ($el.attr("aria-label") === void 0) {
+            $el.attr("aria-label", "carousel");
+          }
+          var slideViewId = data2.mask.attr("id");
+          if (!slideViewId) {
+            slideViewId = "w-slider-mask-" + i;
+            data2.mask.attr("id", slideViewId);
+          }
+          if (!designer && !data2.ariaLiveLabel) {
+            data2.ariaLiveLabel = $(ariaLiveLabelHtml).appendTo(data2.mask);
+          }
+          data2.left.attr("role", "button");
+          data2.left.attr("tabindex", "0");
+          data2.left.attr("aria-controls", slideViewId);
+          if (data2.left.attr("aria-label") === void 0) {
+            data2.left.attr("aria-label", "previous slide");
+          }
+          data2.right.attr("role", "button");
+          data2.right.attr("tabindex", "0");
+          data2.right.attr("aria-controls", slideViewId);
+          if (data2.right.attr("aria-label") === void 0) {
+            data2.right.attr("aria-label", "next slide");
+          }
+          if (!tram.support.transform) {
+            data2.left.hide();
+            data2.right.hide();
+            data2.nav.hide();
+            fallback = true;
+            return;
+          }
+          data2.el.off(namespace);
+          data2.left.off(namespace);
+          data2.right.off(namespace);
+          data2.nav.off(namespace);
+          configure(data2);
+          if (designer) {
+            data2.el.on("setting" + namespace, handler(data2));
+            stopTimer(data2);
+            data2.hasTimer = false;
+          } else {
+            data2.el.on("swipe" + namespace, handler(data2));
+            data2.left.on("click" + namespace, previousFunction(data2));
+            data2.right.on("click" + namespace, next(data2));
+            data2.left.on("keydown" + namespace, keyboardSlideButtonsFunction(data2, previousFunction));
+            data2.right.on("keydown" + namespace, keyboardSlideButtonsFunction(data2, next));
+            data2.nav.on("keydown" + namespace, "> div", handler(data2));
+            if (data2.config.autoplay && !data2.hasTimer) {
+              data2.hasTimer = true;
+              data2.timerCount = 1;
+              startTimer(data2);
+            }
+            data2.el.on("mouseenter" + namespace, hasFocus(data2, true, "mouse"));
+            data2.el.on("focusin" + namespace, hasFocus(data2, true, "keyboard"));
+            data2.el.on("mouseleave" + namespace, hasFocus(data2, false, "mouse"));
+            data2.el.on("focusout" + namespace, hasFocus(data2, false, "keyboard"));
+          }
+          data2.nav.on("click" + namespace, "> div", handler(data2));
+          if (!inApp) {
+            data2.mask.contents().filter(function() {
+              return this.nodeType === 3;
+            }).remove();
+          }
+          var $elHidden = $el.filter(":hidden");
+          $elHidden.addClass(forceShow);
+          var $elHiddenParents = $el.parents(":hidden");
+          $elHiddenParents.addClass(forceShow);
+          if (!inRedraw) {
+            render(i, el);
+          }
+          $elHidden.removeClass(forceShow);
+          $elHiddenParents.removeClass(forceShow);
+        }
+        function configure(data2) {
+          var config = {};
+          config.crossOver = 0;
+          config.animation = data2.el.attr("data-animation") || "slide";
+          if (config.animation === "outin") {
+            config.animation = "cross";
+            config.crossOver = 0.5;
+          }
+          config.easing = data2.el.attr("data-easing") || "ease";
+          var duration = data2.el.attr("data-duration");
+          config.duration = duration != null ? parseInt(duration, 10) : 500;
+          if (isAttrTrue(data2.el.attr("data-infinite"))) {
+            config.infinite = true;
+          }
+          if (isAttrTrue(data2.el.attr("data-disable-swipe"))) {
+            config.disableSwipe = true;
+          }
+          if (isAttrTrue(data2.el.attr("data-hide-arrows"))) {
+            config.hideArrows = true;
+          } else if (data2.config.hideArrows) {
+            data2.left.show();
+            data2.right.show();
+          }
+          if (isAttrTrue(data2.el.attr("data-autoplay"))) {
+            config.autoplay = true;
+            config.delay = parseInt(data2.el.attr("data-delay"), 10) || 2e3;
+            config.timerMax = parseInt(data2.el.attr("data-autoplay-limit"), 10);
+            var touchEvents = "mousedown" + namespace + " touchstart" + namespace;
+            if (!designer) {
+              data2.el.off(touchEvents).one(touchEvents, function() {
+                stopTimer(data2);
+              });
+            }
+          }
+          var arrowWidth = data2.right.width();
+          config.edge = arrowWidth ? arrowWidth + 40 : 100;
+          data2.config = config;
+        }
+        function isAttrTrue(value2) {
+          return value2 === "1" || value2 === "true";
+        }
+        function hasFocus(data2, focusIn, eventType) {
+          return function(evt) {
+            if (!focusIn) {
+              if ($.contains(data2.el.get(0), evt.relatedTarget)) {
+                return;
+              }
+              data2.hasFocus[eventType] = focusIn;
+              if (data2.hasFocus.mouse && eventType === "keyboard" || data2.hasFocus.keyboard && eventType === "mouse") {
+                return;
+              }
+            } else {
+              data2.hasFocus[eventType] = focusIn;
+            }
+            if (focusIn) {
+              data2.ariaLiveLabel.attr("aria-live", "polite");
+              if (data2.hasTimer) {
+                stopTimer(data2);
+              }
+            } else {
+              data2.ariaLiveLabel.attr("aria-live", "off");
+              if (data2.hasTimer) {
+                startTimer(data2);
+              }
+            }
+            return;
+          };
+        }
+        function keyboardSlideButtonsFunction(data2, directionFunction) {
+          return function(evt) {
+            switch (evt.keyCode) {
+              case KEY_CODES.SPACE:
+              case KEY_CODES.ENTER: {
+                directionFunction(data2)();
+                evt.preventDefault();
+                return evt.stopPropagation();
+              }
+            }
+          };
+        }
+        function previousFunction(data2) {
+          return function() {
+            change(data2, {
+              index: data2.index - 1,
+              vector: -1
+            });
+          };
+        }
+        function next(data2) {
+          return function() {
+            change(data2, {
+              index: data2.index + 1,
+              vector: 1
+            });
+          };
+        }
+        function select(data2, value2) {
+          var found = null;
+          if (value2 === data2.slides.length) {
+            init2();
+            layout(data2);
+          }
+          _.each(data2.anchors, function(anchor, index2) {
+            $(anchor.els).each(function(i, el) {
+              if ($(el).index() === value2) {
+                found = index2;
+              }
+            });
+          });
+          if (found != null) {
+            change(data2, {
+              index: found,
+              immediate: true
+            });
+          }
+        }
+        function startTimer(data2) {
+          stopTimer(data2);
+          var config = data2.config;
+          var timerMax = config.timerMax;
+          if (timerMax && data2.timerCount++ > timerMax) {
+            return;
+          }
+          data2.timerId = window.setTimeout(function() {
+            if (data2.timerId == null || designer) {
+              return;
+            }
+            next(data2)();
+            startTimer(data2);
+          }, config.delay);
+        }
+        function stopTimer(data2) {
+          window.clearTimeout(data2.timerId);
+          data2.timerId = null;
+        }
+        function handler(data2) {
+          return function(evt, options) {
+            options = options || {};
+            var config = data2.config;
+            if (designer && evt.type === "setting") {
+              if (options.select === "prev") {
+                return previousFunction(data2)();
+              }
+              if (options.select === "next") {
+                return next(data2)();
+              }
+              configure(data2);
+              layout(data2);
+              if (options.select == null) {
+                return;
+              }
+              select(data2, options.select);
+              return;
+            }
+            if (evt.type === "swipe") {
+              if (config.disableSwipe) {
+                return;
+              }
+              if (Webflow.env("editor")) {
+                return;
+              }
+              if (options.direction === "left") {
+                return next(data2)();
+              }
+              if (options.direction === "right") {
+                return previousFunction(data2)();
+              }
+              return;
+            }
+            if (data2.nav.has(evt.target).length) {
+              var index2 = $(evt.target).index();
+              if (evt.type === "click") {
+                change(data2, {
+                  index: index2
+                });
+              }
+              if (evt.type === "keydown") {
+                switch (evt.keyCode) {
+                  case KEY_CODES.ENTER:
+                  case KEY_CODES.SPACE: {
+                    change(data2, {
+                      index: index2
+                    });
+                    evt.preventDefault();
+                    break;
+                  }
+                  case KEY_CODES.ARROW_LEFT:
+                  case KEY_CODES.ARROW_UP: {
+                    focusDot(data2.nav, Math.max(index2 - 1, 0));
+                    evt.preventDefault();
+                    break;
+                  }
+                  case KEY_CODES.ARROW_RIGHT:
+                  case KEY_CODES.ARROW_DOWN: {
+                    focusDot(data2.nav, Math.min(index2 + 1, data2.pages));
+                    evt.preventDefault();
+                    break;
+                  }
+                  case KEY_CODES.HOME: {
+                    focusDot(data2.nav, 0);
+                    evt.preventDefault();
+                    break;
+                  }
+                  case KEY_CODES.END: {
+                    focusDot(data2.nav, data2.pages);
+                    evt.preventDefault();
+                    break;
+                  }
+                  default: {
+                    return;
+                  }
+                }
+              }
+            }
+          };
+        }
+        function focusDot($nav, index2) {
+          var $active = $nav.children().eq(index2).focus();
+          $nav.children().not($active);
+        }
+        function change(data2, options) {
+          options = options || {};
+          var config = data2.config;
+          var anchors = data2.anchors;
+          data2.previous = data2.index;
+          var index2 = options.index;
+          var shift = {};
+          if (index2 < 0) {
+            index2 = anchors.length - 1;
+            if (config.infinite) {
+              shift.x = -data2.endX;
+              shift.from = 0;
+              shift.to = anchors[0].width;
+            }
+          } else if (index2 >= anchors.length) {
+            index2 = 0;
+            if (config.infinite) {
+              shift.x = anchors[anchors.length - 1].width;
+              shift.from = -anchors[anchors.length - 1].x;
+              shift.to = shift.from - shift.x;
+            }
+          }
+          data2.index = index2;
+          var $active = data2.nav.children().eq(index2).addClass("w-active").attr("aria-pressed", "true").attr("tabindex", "0");
+          data2.nav.children().not($active).removeClass("w-active").attr("aria-pressed", "false").attr("tabindex", "-1");
+          if (config.hideArrows) {
+            data2.index === anchors.length - 1 ? data2.right.hide() : data2.right.show();
+            data2.index === 0 ? data2.left.hide() : data2.left.show();
+          }
+          var lastOffsetX = data2.offsetX || 0;
+          var offsetX = data2.offsetX = -anchors[data2.index].x;
+          var resetConfig = {
+            x: offsetX,
+            opacity: 1,
+            visibility: ""
+          };
+          var targets = $(anchors[data2.index].els);
+          var prevTargs = $(anchors[data2.previous] && anchors[data2.previous].els);
+          var others = data2.slides.not(targets);
+          var animation = config.animation;
+          var easing = config.easing;
+          var duration = Math.round(config.duration);
+          var vector = options.vector || (data2.index > data2.previous ? 1 : -1);
+          var fadeRule = "opacity " + duration + "ms " + easing;
+          var slideRule = "transform " + duration + "ms " + easing;
+          targets.find(FOCUSABLE_SELECTOR).removeAttr("tabindex");
+          targets.removeAttr("aria-hidden");
+          targets.find("*").removeAttr("aria-hidden");
+          others.find(FOCUSABLE_SELECTOR).attr("tabindex", "-1");
+          others.attr("aria-hidden", "true");
+          others.find("*").attr("aria-hidden", "true");
+          if (!designer) {
+            targets.each(ix.intro);
+            others.each(ix.outro);
+          }
+          if (options.immediate && !inRedraw) {
+            tram(targets).set(resetConfig);
+            resetOthers();
+            return;
+          }
+          if (data2.index === data2.previous) {
+            return;
+          }
+          if (!designer) {
+            data2.ariaLiveLabel.text(`Slide ${index2 + 1} of ${anchors.length}.`);
+          }
+          if (animation === "cross") {
+            var reduced = Math.round(duration - duration * config.crossOver);
+            var wait = Math.round(duration - reduced);
+            fadeRule = "opacity " + reduced + "ms " + easing;
+            tram(prevTargs).set({
+              visibility: ""
+            }).add(fadeRule).start({
+              opacity: 0
+            });
+            tram(targets).set({
+              visibility: "",
+              x: offsetX,
+              opacity: 0,
+              zIndex: data2.depth++
+            }).add(fadeRule).wait(wait).then({
+              opacity: 1
+            }).then(resetOthers);
+            return;
+          }
+          if (animation === "fade") {
+            tram(prevTargs).set({
+              visibility: ""
+            }).stop();
+            tram(targets).set({
+              visibility: "",
+              x: offsetX,
+              opacity: 0,
+              zIndex: data2.depth++
+            }).add(fadeRule).start({
+              opacity: 1
+            }).then(resetOthers);
+            return;
+          }
+          if (animation === "over") {
+            resetConfig = {
+              x: data2.endX
+            };
+            tram(prevTargs).set({
+              visibility: ""
+            }).stop();
+            tram(targets).set({
+              visibility: "",
+              zIndex: data2.depth++,
+              x: offsetX + anchors[data2.index].width * vector
+            }).add(slideRule).start({
+              x: offsetX
+            }).then(resetOthers);
+            return;
+          }
+          if (config.infinite && shift.x) {
+            tram(data2.slides.not(prevTargs)).set({
+              visibility: "",
+              x: shift.x
+            }).add(slideRule).start({
+              x: offsetX
+            });
+            tram(prevTargs).set({
+              visibility: "",
+              x: shift.from
+            }).add(slideRule).start({
+              x: shift.to
+            });
+            data2.shifted = prevTargs;
+          } else {
+            if (config.infinite && data2.shifted) {
+              tram(data2.shifted).set({
+                visibility: "",
+                x: lastOffsetX
+              });
+              data2.shifted = null;
+            }
+            tram(data2.slides).set({
+              visibility: ""
+            }).add(slideRule).start({
+              x: offsetX
+            });
+          }
+          function resetOthers() {
+            targets = $(anchors[data2.index].els);
+            others = data2.slides.not(targets);
+            if (animation !== "slide") {
+              resetConfig.visibility = "hidden";
+            }
+            tram(others).set(resetConfig);
+          }
+        }
+        function render(i, el) {
+          var data2 = $.data(el, namespace);
+          if (!data2) {
+            return;
+          }
+          if (maskChanged(data2)) {
+            return layout(data2);
+          }
+          if (designer && slidesChanged(data2)) {
+            layout(data2);
+          }
+        }
+        function layout(data2) {
+          var pages = 1;
+          var offset = 0;
+          var anchor = 0;
+          var width2 = 0;
+          var maskWidth = data2.maskWidth;
+          var threshold = maskWidth - data2.config.edge;
+          if (threshold < 0) {
+            threshold = 0;
+          }
+          data2.anchors = [{
+            els: [],
+            x: 0,
+            width: 0
+          }];
+          data2.slides.each(function(i, el) {
+            if (anchor - offset > threshold) {
+              pages++;
+              offset += maskWidth;
+              data2.anchors[pages - 1] = {
+                els: [],
+                x: anchor,
+                width: 0
+              };
+            }
+            width2 = $(el).outerWidth(true);
+            anchor += width2;
+            data2.anchors[pages - 1].width += width2;
+            data2.anchors[pages - 1].els.push(el);
+            var ariaLabel = i + 1 + " of " + data2.slides.length;
+            $(el).attr("aria-label", ariaLabel);
+            $(el).attr("role", "group");
+          });
+          data2.endX = anchor;
+          if (designer) {
+            data2.pages = null;
+          }
+          if (data2.nav.length && data2.pages !== pages) {
+            data2.pages = pages;
+            buildNav(data2);
+          }
+          var index2 = data2.index;
+          if (index2 >= pages) {
+            index2 = pages - 1;
+          }
+          change(data2, {
+            immediate: true,
+            index: index2
+          });
+        }
+        function buildNav(data2) {
+          var dots = [];
+          var $dot;
+          var spacing = data2.el.attr("data-nav-spacing");
+          if (spacing) {
+            spacing = parseFloat(spacing) + "px";
+          }
+          for (var i = 0, len = data2.pages; i < len; i++) {
+            $dot = $(dot);
+            $dot.attr("aria-label", "Show slide " + (i + 1) + " of " + len).attr("aria-pressed", "false").attr("role", "button").attr("tabindex", "-1");
+            if (data2.nav.hasClass("w-num")) {
+              $dot.text(i + 1);
+            }
+            if (spacing != null) {
+              $dot.css({
+                "margin-left": spacing,
+                "margin-right": spacing
+              });
+            }
+            dots.push($dot);
+          }
+          data2.nav.empty().append(dots);
+        }
+        function maskChanged(data2) {
+          var maskWidth = data2.mask.width();
+          if (data2.maskWidth !== maskWidth) {
+            data2.maskWidth = maskWidth;
+            return true;
+          }
+          return false;
+        }
+        function slidesChanged(data2) {
+          var slidesWidth = 0;
+          data2.slides.each(function(i, el) {
+            slidesWidth += $(el).outerWidth(true);
+          });
+          if (data2.slidesWidth !== slidesWidth) {
+            data2.slidesWidth = slidesWidth;
+            return true;
+          }
+          return false;
+        }
+        return api;
+      });
+    }
+  });
+
   // <stdin>
   require_webflow_lottie();
   require_webflow_brand();
@@ -24140,6 +24792,7 @@
   require_webflow_touch();
   require_webflow_forms();
   require_webflow_navbar();
+  require_webflow_slider();
 })();
 /*!
  * tram.js v0.8.2-global
@@ -24172,5 +24825,5 @@ timm/lib/timm.js:
  * Webflow: Interactions 2.0: Init
  */
 Webflow.require('ix2').init(
-{"events":{"e-3":{"id":"e-3","name":"","animationType":"custom","eventTypeId":"MOUSE_OVER","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-4","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-10"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".social-icon-image","originalId":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e","appliesTo":"CLASS"},"targets":[{"selector":".social-icon-image","originalId":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":0,"direction":null,"effectIn":null},"createdOn":1675462272487},"e-4":{"id":"e-4","name":"","animationType":"custom","eventTypeId":"MOUSE_OUT","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-5","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-9"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".social-icon-image","originalId":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e","appliesTo":"CLASS"},"targets":[{"selector":".social-icon-image","originalId":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1675462272488},"e-9":{"id":"e-9","name":"","animationType":"custom","eventTypeId":"MOUSE_OVER","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-8","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-10"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".property-card","originalId":"65ef6b305d5118ad73b2f275|c9a86093-b5c7-bdd4-8660-ff0fc7e0efc1","appliesTo":"CLASS"},"targets":[{"selector":".property-card","originalId":"65ef6b305d5118ad73b2f275|c9a86093-b5c7-bdd4-8660-ff0fc7e0efc1","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1595308712088},"e-10":{"id":"e-10","name":"","animationType":"custom","eventTypeId":"MOUSE_OUT","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-9","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-9"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".property-card","originalId":"65ef6b305d5118ad73b2f275|c9a86093-b5c7-bdd4-8660-ff0fc7e0efc1","appliesTo":"CLASS"},"targets":[{"selector":".property-card","originalId":"65ef6b305d5118ad73b2f275|c9a86093-b5c7-bdd4-8660-ff0fc7e0efc1","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1595308712088},"e-15":{"id":"e-15","name":"","animationType":"preset","eventTypeId":"MOUSE_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-12","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-30"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"0794229d-08f6-ab1e-af19-544e9b31594d","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"0794229d-08f6-ab1e-af19-544e9b31594d","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1664451305402},"e-16":{"id":"e-16","name":"","animationType":"preset","eventTypeId":"MOUSE_SECOND_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-13","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-31"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"0794229d-08f6-ab1e-af19-544e9b31594d","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"0794229d-08f6-ab1e-af19-544e9b31594d","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1664451305402},"e-27":{"id":"e-27","name":"","animationType":"custom","eventTypeId":"SCROLLING_IN_VIEW","action":{"id":"","actionTypeId":"GENERAL_CONTINUOUS_ACTION","config":{"actionListId":"a-18","affectedElements":{},"duration":0}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f275|81253170-c124-be7e-fe2c-03e322ad5783","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f275|81253170-c124-be7e-fe2c-03e322ad5783","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":[{"continuousParameterGroupId":"a-18-p","smoothing":99,"startsEntering":true,"addStartOffset":false,"addOffsetValue":50,"startsExiting":false,"addEndOffset":false,"endOffsetValue":50}],"createdOn":1658137425136},"e-28":{"id":"e-28","name":"","animationType":"preset","eventTypeId":"MOUSE_OVER","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-8","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-29"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f27d|2a7ec8ac-ed55-313b-4718-a8ccc91732f7","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f27d|2a7ec8ac-ed55-313b-4718-a8ccc91732f7","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1675533836029},"e-29":{"id":"e-29","name":"","animationType":"preset","eventTypeId":"MOUSE_OUT","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-9","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-28"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f27d|2a7ec8ac-ed55-313b-4718-a8ccc91732f7","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f27d|2a7ec8ac-ed55-313b-4718-a8ccc91732f7","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1675533836029},"e-36":{"id":"e-36","name":"","animationType":"preset","eventTypeId":"MOUSE_OVER","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-8","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-37"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f278|7dc21b1f-ee98-1f1d-3dd6-e2c0dbc4f917","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f278|7dc21b1f-ee98-1f1d-3dd6-e2c0dbc4f917","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1675555240106},"e-37":{"id":"e-37","name":"","animationType":"preset","eventTypeId":"MOUSE_OUT","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-9","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-36"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f278|7dc21b1f-ee98-1f1d-3dd6-e2c0dbc4f917","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f278|7dc21b1f-ee98-1f1d-3dd6-e2c0dbc4f917","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1675555240106},"e-44":{"id":"e-44","name":"","animationType":"preset","eventTypeId":"MOUSE_OVER","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-8","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-45"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f27b|2c246a66-7f04-2ffc-1945-097de9ab7908","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f27b|2c246a66-7f04-2ffc-1945-097de9ab7908","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1681373395547},"e-45":{"id":"e-45","name":"","animationType":"preset","eventTypeId":"MOUSE_OUT","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-9","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-44"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f27b|2c246a66-7f04-2ffc-1945-097de9ab7908","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f27b|2c246a66-7f04-2ffc-1945-097de9ab7908","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1681373395547},"e-48":{"id":"e-48","name":"","animationType":"preset","eventTypeId":"SCROLL_INTO_VIEW","action":{"id":"","actionTypeId":"SLIDE_EFFECT","instant":false,"config":{"actionListId":"slideInTop","autoStopEventId":"e-49"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".section","originalId":"65ef6b305d5118ad73b2f275|f4a5a9b2-9d65-0883-d65a-9b729db733e5","appliesTo":"CLASS"},"targets":[{"selector":".section","originalId":"65ef6b305d5118ad73b2f275|f4a5a9b2-9d65-0883-d65a-9b729db733e5","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":45,"scrollOffsetUnit":"%","delay":0,"direction":"TOP","effectIn":true},"createdOn":1684524064565},"e-50":{"id":"e-50","name":"","animationType":"preset","eventTypeId":"MOUSE_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-19","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-51"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f275|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f275|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1710306936918},"e-51":{"id":"e-51","name":"","animationType":"preset","eventTypeId":"MOUSE_SECOND_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-20","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-50"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f275|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f275|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1710306936918},"e-52":{"id":"e-52","animationType":"custom","eventTypeId":"MOUSE_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-21","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-53"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".faq-question","originalId":"65ef6b305d5118ad73b2f275|dd6f24e3-0d13-6b21-61e2-2a7fa57b4050","appliesTo":"CLASS"},"targets":[{"selector":".faq-question","originalId":"65ef6b305d5118ad73b2f275|dd6f24e3-0d13-6b21-61e2-2a7fa57b4050","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1543891273196},"e-53":{"id":"e-53","animationType":"custom","eventTypeId":"MOUSE_SECOND_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-22","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-52"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".faq-question","originalId":"65ef6b305d5118ad73b2f275|dd6f24e3-0d13-6b21-61e2-2a7fa57b4050","appliesTo":"CLASS"},"targets":[{"selector":".faq-question","originalId":"65ef6b305d5118ad73b2f275|dd6f24e3-0d13-6b21-61e2-2a7fa57b4050","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1543891273198},"e-54":{"id":"e-54","name":"","animationType":"preset","eventTypeId":"SCROLLING_IN_VIEW","action":{"id":"","actionTypeId":"GENERAL_CONTINUOUS_ACTION","config":{"actionListId":"a-18","affectedElements":{},"duration":0}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65f35b219cc3fbfc47857d44|81253170-c124-be7e-fe2c-03e322ad5783","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65f35b219cc3fbfc47857d44|81253170-c124-be7e-fe2c-03e322ad5783","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":[{"continuousParameterGroupId":"a-18-p","smoothing":99,"startsEntering":true,"addStartOffset":false,"addOffsetValue":50,"startsExiting":false,"addEndOffset":false,"endOffsetValue":50}],"createdOn":1710447393764},"e-55":{"id":"e-55","name":"","animationType":"preset","eventTypeId":"MOUSE_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-19","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-56"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65f35b219cc3fbfc47857d44|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65f35b219cc3fbfc47857d44|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1710447393764},"e-56":{"id":"e-56","name":"","animationType":"preset","eventTypeId":"MOUSE_SECOND_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-20","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-55"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65f35b219cc3fbfc47857d44|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65f35b219cc3fbfc47857d44|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1710447393764}},"actionLists":{"a-4":{"id":"a-4","title":"Social Icons Hover IN","actionItemGroups":[{"actionItems":[{"id":"a-4-n","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e"},"xValue":1,"yValue":1,"locked":true}}]},{"actionItems":[{"id":"a-4-n-2","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"","duration":200,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e"},"xValue":1.2,"yValue":1.2,"locked":true}}]}],"useFirstGroupAsInitialState":true,"createdOn":1675462316272},"a-5":{"id":"a-5","title":"Social Icons Hover OUT","actionItemGroups":[{"actionItems":[{"id":"a-5-n","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"","duration":0,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e"},"xValue":1.2,"yValue":1.2,"locked":true}}]},{"actionItems":[{"id":"a-5-n-2","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"","duration":200,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e"},"xValue":1,"yValue":1,"locked":true}}]}],"useFirstGroupAsInitialState":false,"createdOn":1675462383471},"a-8":{"id":"a-8","title":"Card Hover IN","actionItemGroups":[{"actionItems":[{"id":"a-8-n","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"ease","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".card-image","selectorGuids":["d1ddcdc2-1ed8-4b2b-8f6f-e8f549ef47ad"]},"xValue":1.1,"yValue":1.1,"locked":true}},{"id":"a-8-n-2","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"ease","duration":400,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|f57ddbf1-2361-bbae-b2dc-6e0eeb90c358"},"xValue":1.01,"yValue":1.01,"locked":true}}]}],"useFirstGroupAsInitialState":false,"createdOn":1595308718117},"a-9":{"id":"a-9","title":"Card Hover OUT","actionItemGroups":[{"actionItems":[{"id":"a-9-n","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"ease","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".card-image","selectorGuids":["d1ddcdc2-1ed8-4b2b-8f6f-e8f549ef47ad"]},"xValue":1,"yValue":1,"locked":true}},{"id":"a-9-n-2","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"ease","duration":400,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|f57ddbf1-2361-bbae-b2dc-6e0eeb90c358"},"xValue":1,"yValue":1,"locked":true}}]}],"useFirstGroupAsInitialState":false,"createdOn":1595308718117},"a-12":{"id":"a-12","title":"Hamburger Menu / Tap Open","actionItemGroups":[{"actionItems":[{"id":"a-12-n","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":0}}]},{"actionItems":[{"id":"a-12-n-2","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"ease","duration":600,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":50}}]}],"useFirstGroupAsInitialState":true,"createdOn":1663850737197},"a-13":{"id":"a-13","title":"Hamburger Menu / Tap Close","actionItemGroups":[{"actionItems":[{"id":"a-13-n","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"ease","duration":600,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":0}}]}],"useFirstGroupAsInitialState":false,"createdOn":1663850737197},"a-18":{"id":"a-18","title":"Moving Gallery","continuousParameterGroups":[{"id":"a-18-p","type":"SCROLL_PROGRESS","parameterLabel":"Scroll","continuousActionGroups":[{"keyframe":0,"actionItems":[{"id":"a-18-n","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".moving-gallery-top-grid","selectorGuids":["85354056-4fb1-7329-faab-4ea4923f4458"]},"xValue":0,"xUnit":"vw","yUnit":"PX","zUnit":"PX"}},{"id":"a-18-n-2","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".moving-gallery-bottom-grid","selectorGuids":["db465d31-c3e6-1748-a1dc-92aac139799b"]},"xValue":-20,"xUnit":"vw","yUnit":"PX","zUnit":"PX"}}]},{"keyframe":100,"actionItems":[{"id":"a-18-n-3","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".moving-gallery-top-grid","selectorGuids":["85354056-4fb1-7329-faab-4ea4923f4458"]},"xValue":-20,"xUnit":"vw","yUnit":"PX","zUnit":"PX"}},{"id":"a-18-n-4","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".moving-gallery-bottom-grid","selectorGuids":["db465d31-c3e6-1748-a1dc-92aac139799b"]},"xValue":0,"xUnit":"vw","yUnit":"PX","zUnit":"PX"}}]}]}],"createdOn":1658137438145},"a-19":{"id":"a-19","title":"Hamburger Menu / Tap Open 2","actionItemGroups":[{"actionItems":[{"id":"a-19-n","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":0}}]},{"actionItems":[{"id":"a-19-n-2","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"ease","duration":600,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":50}}]}],"useFirstGroupAsInitialState":true,"createdOn":1663850737197},"a-20":{"id":"a-20","title":"Hamburger Menu / Tap Close 2","actionItemGroups":[{"actionItems":[{"id":"a-20-n","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"ease","duration":600,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":0}}]}],"useFirstGroupAsInitialState":false,"createdOn":1663850737197},"a-21":{"id":"a-21","title":"FAQ Open","actionItemGroups":[{"actionItems":[{"id":"a-21-n","actionTypeId":"STYLE_SIZE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"SIBLINGS","selector":".faq-answer","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead9"]},"heightValue":0,"widthUnit":"PX","heightUnit":"PX","locked":false}}]},{"actionItems":[{"id":"a-21-n-2","actionTypeId":"STYLE_SIZE","config":{"delay":0,"easing":"easeInOut","duration":300,"target":{"useEventTarget":"SIBLINGS","selector":".faq-answer","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead9"]},"heightValue":0,"widthUnit":"PX","heightUnit":"AUTO","locked":false}},{"id":"a-21-n-3","actionTypeId":"STYLE_SIZE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".faq-plus-l","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead0"]},"heightValue":0,"widthUnit":"PX","heightUnit":"%","locked":false}},{"id":"a-21-n-4","actionTypeId":"TRANSFORM_ROTATE","config":{"delay":0,"easing":"inOutBack","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".faq-plus-wrap","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead5"]},"zValue":180,"xUnit":"DEG","yUnit":"DEG","zUnit":"DEG"}}]}],"useFirstGroupAsInitialState":true,"createdOn":1543891276079},"a-22":{"id":"a-22","title":"FAQ Close","actionItemGroups":[{"actionItems":[{"id":"a-22-n","actionTypeId":"STYLE_SIZE","config":{"delay":0,"easing":"easeInOut","duration":300,"target":{"useEventTarget":"SIBLINGS","selector":".faq-answer","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead9"]},"heightValue":0,"widthUnit":"PX","heightUnit":"PX","locked":false}},{"id":"a-22-n-2","actionTypeId":"STYLE_SIZE","config":{"delay":0,"easing":"","duration":300,"target":{"useEventTarget":"CHILDREN","selector":".faq-plus-l","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead0"]},"heightValue":100,"widthUnit":"PX","heightUnit":"%","locked":false}},{"id":"a-22-n-3","actionTypeId":"TRANSFORM_ROTATE","config":{"delay":0,"easing":"inOutBack","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".faq-plus-wrap","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead5"]},"zValue":0,"xUnit":"DEG","yUnit":"DEG","zUnit":"DEG"}}]}],"useFirstGroupAsInitialState":false,"createdOn":1543891276079},"slideInTop":{"id":"slideInTop","useFirstGroupAsInitialState":true,"actionItemGroups":[{"actionItems":[{"actionTypeId":"STYLE_OPACITY","config":{"delay":0,"duration":0,"target":{"id":"N/A","appliesTo":"TRIGGER_ELEMENT","useEventTarget":true},"value":0}}]},{"actionItems":[{"actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"duration":0,"target":{"id":"N/A","appliesTo":"TRIGGER_ELEMENT","useEventTarget":true},"xValue":0,"yValue":-100,"xUnit":"PX","yUnit":"PX","zUnit":"PX"}}]},{"actionItems":[{"actionTypeId":"STYLE_OPACITY","config":{"delay":0,"easing":"outQuart","duration":1000,"target":{"id":"N/A","appliesTo":"TRIGGER_ELEMENT","useEventTarget":true},"value":1}},{"actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"outQuart","duration":1000,"target":{"id":"N/A","appliesTo":"TRIGGER_ELEMENT","useEventTarget":true},"xValue":0,"yValue":0,"xUnit":"PX","yUnit":"PX","zUnit":"PX"}}]}]}},"site":{"mediaQueries":[{"key":"main","min":992,"max":10000},{"key":"medium","min":768,"max":991},{"key":"small","min":480,"max":767},{"key":"tiny","min":0,"max":479}]}}
+{"events":{"e-3":{"id":"e-3","name":"","animationType":"custom","eventTypeId":"MOUSE_OVER","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-4","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-10"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".social-icon-image","originalId":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e","appliesTo":"CLASS"},"targets":[{"selector":".social-icon-image","originalId":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":0,"direction":null,"effectIn":null},"createdOn":1675462272487},"e-4":{"id":"e-4","name":"","animationType":"custom","eventTypeId":"MOUSE_OUT","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-5","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-9"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".social-icon-image","originalId":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e","appliesTo":"CLASS"},"targets":[{"selector":".social-icon-image","originalId":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1675462272488},"e-9":{"id":"e-9","name":"","animationType":"custom","eventTypeId":"MOUSE_OVER","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-8","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-10"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".property-card","originalId":"65ef6b305d5118ad73b2f275|c9a86093-b5c7-bdd4-8660-ff0fc7e0efc1","appliesTo":"CLASS"},"targets":[{"selector":".property-card","originalId":"65ef6b305d5118ad73b2f275|c9a86093-b5c7-bdd4-8660-ff0fc7e0efc1","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1595308712088},"e-10":{"id":"e-10","name":"","animationType":"custom","eventTypeId":"MOUSE_OUT","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-9","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-9"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".property-card","originalId":"65ef6b305d5118ad73b2f275|c9a86093-b5c7-bdd4-8660-ff0fc7e0efc1","appliesTo":"CLASS"},"targets":[{"selector":".property-card","originalId":"65ef6b305d5118ad73b2f275|c9a86093-b5c7-bdd4-8660-ff0fc7e0efc1","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1595308712088},"e-15":{"id":"e-15","name":"","animationType":"preset","eventTypeId":"MOUSE_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-12","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-30"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"0794229d-08f6-ab1e-af19-544e9b31594d","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"0794229d-08f6-ab1e-af19-544e9b31594d","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1664451305402},"e-16":{"id":"e-16","name":"","animationType":"preset","eventTypeId":"MOUSE_SECOND_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-13","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-31"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"0794229d-08f6-ab1e-af19-544e9b31594d","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"0794229d-08f6-ab1e-af19-544e9b31594d","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1664451305402},"e-27":{"id":"e-27","name":"","animationType":"custom","eventTypeId":"SCROLLING_IN_VIEW","action":{"id":"","actionTypeId":"GENERAL_CONTINUOUS_ACTION","config":{"actionListId":"a-18","affectedElements":{},"duration":0}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f275|81253170-c124-be7e-fe2c-03e322ad5783","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f275|81253170-c124-be7e-fe2c-03e322ad5783","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":[{"continuousParameterGroupId":"a-18-p","smoothing":99,"startsEntering":true,"addStartOffset":false,"addOffsetValue":50,"startsExiting":false,"addEndOffset":false,"endOffsetValue":50}],"createdOn":1658137425136},"e-28":{"id":"e-28","name":"","animationType":"preset","eventTypeId":"MOUSE_OVER","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-8","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-29"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f27d|2a7ec8ac-ed55-313b-4718-a8ccc91732f7","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f27d|2a7ec8ac-ed55-313b-4718-a8ccc91732f7","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1675533836029},"e-29":{"id":"e-29","name":"","animationType":"preset","eventTypeId":"MOUSE_OUT","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-9","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-28"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f27d|2a7ec8ac-ed55-313b-4718-a8ccc91732f7","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f27d|2a7ec8ac-ed55-313b-4718-a8ccc91732f7","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1675533836029},"e-36":{"id":"e-36","name":"","animationType":"preset","eventTypeId":"MOUSE_OVER","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-8","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-37"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f278|7dc21b1f-ee98-1f1d-3dd6-e2c0dbc4f917","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f278|7dc21b1f-ee98-1f1d-3dd6-e2c0dbc4f917","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1675555240106},"e-37":{"id":"e-37","name":"","animationType":"preset","eventTypeId":"MOUSE_OUT","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-9","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-36"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f278|7dc21b1f-ee98-1f1d-3dd6-e2c0dbc4f917","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f278|7dc21b1f-ee98-1f1d-3dd6-e2c0dbc4f917","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1675555240106},"e-44":{"id":"e-44","name":"","animationType":"preset","eventTypeId":"MOUSE_OVER","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-8","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-45"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f27b|2c246a66-7f04-2ffc-1945-097de9ab7908","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f27b|2c246a66-7f04-2ffc-1945-097de9ab7908","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1681373395547},"e-45":{"id":"e-45","name":"","animationType":"preset","eventTypeId":"MOUSE_OUT","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-9","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-44"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f27b|2c246a66-7f04-2ffc-1945-097de9ab7908","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f27b|2c246a66-7f04-2ffc-1945-097de9ab7908","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1681373395547},"e-48":{"id":"e-48","name":"","animationType":"preset","eventTypeId":"SCROLL_INTO_VIEW","action":{"id":"","actionTypeId":"SLIDE_EFFECT","instant":false,"config":{"actionListId":"slideInTop","autoStopEventId":"e-49"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".section","originalId":"65ef6b305d5118ad73b2f275|f4a5a9b2-9d65-0883-d65a-9b729db733e5","appliesTo":"CLASS"},"targets":[{"selector":".section","originalId":"65ef6b305d5118ad73b2f275|f4a5a9b2-9d65-0883-d65a-9b729db733e5","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":45,"scrollOffsetUnit":"%","delay":0,"direction":"TOP","effectIn":true},"createdOn":1684524064565},"e-50":{"id":"e-50","name":"","animationType":"preset","eventTypeId":"MOUSE_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-19","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-51"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f275|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f275|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1710306936918},"e-51":{"id":"e-51","name":"","animationType":"preset","eventTypeId":"MOUSE_SECOND_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-20","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-50"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65ef6b305d5118ad73b2f275|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65ef6b305d5118ad73b2f275|b8c8b13a-7bf5-38b9-7fb7-9ac841b1a3c6","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1710306936918},"e-52":{"id":"e-52","animationType":"custom","eventTypeId":"MOUSE_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-21","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-53"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".faq-question","originalId":"65ef6b305d5118ad73b2f275|dd6f24e3-0d13-6b21-61e2-2a7fa57b4050","appliesTo":"CLASS"},"targets":[{"selector":".faq-question","originalId":"65ef6b305d5118ad73b2f275|dd6f24e3-0d13-6b21-61e2-2a7fa57b4050","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1543891273196},"e-53":{"id":"e-53","animationType":"custom","eventTypeId":"MOUSE_SECOND_CLICK","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-22","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-52"}},"mediaQueries":["main","medium","small","tiny"],"target":{"selector":".faq-question","originalId":"65ef6b305d5118ad73b2f275|dd6f24e3-0d13-6b21-61e2-2a7fa57b4050","appliesTo":"CLASS"},"targets":[{"selector":".faq-question","originalId":"65ef6b305d5118ad73b2f275|dd6f24e3-0d13-6b21-61e2-2a7fa57b4050","appliesTo":"CLASS"}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1543891273198},"e-54":{"id":"e-54","name":"","animationType":"preset","eventTypeId":"SCROLLING_IN_VIEW","action":{"id":"","actionTypeId":"GENERAL_CONTINUOUS_ACTION","config":{"actionListId":"a-18","affectedElements":{},"duration":0}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65f35b219cc3fbfc47857d44|81253170-c124-be7e-fe2c-03e322ad5783","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65f35b219cc3fbfc47857d44|81253170-c124-be7e-fe2c-03e322ad5783","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":[{"continuousParameterGroupId":"a-18-p","smoothing":99,"startsEntering":true,"addStartOffset":false,"addOffsetValue":50,"startsExiting":false,"addEndOffset":false,"endOffsetValue":50}],"createdOn":1710447393764},"e-55":{"id":"e-55","name":"","animationType":"preset","eventTypeId":"NAVBAR_OPEN","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-23","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-56"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65f35b219cc3fbfc47857d44|14eee04c-1bae-4e91-0979-cd9ba94b9379","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65f35b219cc3fbfc47857d44|14eee04c-1bae-4e91-0979-cd9ba94b9379","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1663319540707},"e-56":{"id":"e-56","name":"","animationType":"preset","eventTypeId":"NAVBAR_CLOSE","action":{"id":"","actionTypeId":"GENERAL_START_ACTION","config":{"delay":0,"easing":"","duration":0,"actionListId":"a-24","affectedElements":{},"playInReverse":false,"autoStopEventId":"e-55"}},"mediaQueries":["main","medium","small","tiny"],"target":{"id":"65f35b219cc3fbfc47857d44|14eee04c-1bae-4e91-0979-cd9ba94b9379","appliesTo":"ELEMENT","styleBlockIds":[]},"targets":[{"id":"65f35b219cc3fbfc47857d44|14eee04c-1bae-4e91-0979-cd9ba94b9379","appliesTo":"ELEMENT","styleBlockIds":[]}],"config":{"loop":false,"playInReverse":false,"scrollOffsetValue":null,"scrollOffsetUnit":null,"delay":null,"direction":null,"effectIn":null},"createdOn":1663319540707}},"actionLists":{"a-4":{"id":"a-4","title":"Social Icons Hover IN","actionItemGroups":[{"actionItems":[{"id":"a-4-n","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e"},"xValue":1,"yValue":1,"locked":true}}]},{"actionItems":[{"id":"a-4-n-2","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"","duration":200,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e"},"xValue":1.2,"yValue":1.2,"locked":true}}]}],"useFirstGroupAsInitialState":true,"createdOn":1675462316272},"a-5":{"id":"a-5","title":"Social Icons Hover OUT","actionItemGroups":[{"actionItems":[{"id":"a-5-n","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"","duration":0,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e"},"xValue":1.2,"yValue":1.2,"locked":true}}]},{"actionItems":[{"id":"a-5-n-2","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"","duration":200,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|aae1127d-928c-ff9f-e885-cf647fdd912e"},"xValue":1,"yValue":1,"locked":true}}]}],"useFirstGroupAsInitialState":false,"createdOn":1675462383471},"a-8":{"id":"a-8","title":"Card Hover IN","actionItemGroups":[{"actionItems":[{"id":"a-8-n","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"ease","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".card-image","selectorGuids":["d1ddcdc2-1ed8-4b2b-8f6f-e8f549ef47ad"]},"xValue":1.1,"yValue":1.1,"locked":true}},{"id":"a-8-n-2","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"ease","duration":400,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|f57ddbf1-2361-bbae-b2dc-6e0eeb90c358"},"xValue":1.01,"yValue":1.01,"locked":true}}]}],"useFirstGroupAsInitialState":false,"createdOn":1595308718117},"a-9":{"id":"a-9","title":"Card Hover OUT","actionItemGroups":[{"actionItems":[{"id":"a-9-n","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"ease","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".card-image","selectorGuids":["d1ddcdc2-1ed8-4b2b-8f6f-e8f549ef47ad"]},"xValue":1,"yValue":1,"locked":true}},{"id":"a-9-n-2","actionTypeId":"TRANSFORM_SCALE","config":{"delay":0,"easing":"ease","duration":400,"target":{"useEventTarget":true,"id":"65ef6b305d5118ad73b2f275|f57ddbf1-2361-bbae-b2dc-6e0eeb90c358"},"xValue":1,"yValue":1,"locked":true}}]}],"useFirstGroupAsInitialState":false,"createdOn":1595308718117},"a-12":{"id":"a-12","title":"Hamburger Menu / Tap Open","actionItemGroups":[{"actionItems":[{"id":"a-12-n","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":0}}]},{"actionItems":[{"id":"a-12-n-2","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"ease","duration":600,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":50}}]}],"useFirstGroupAsInitialState":true,"createdOn":1663850737197},"a-13":{"id":"a-13","title":"Hamburger Menu / Tap Close","actionItemGroups":[{"actionItems":[{"id":"a-13-n","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"ease","duration":600,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":0}}]}],"useFirstGroupAsInitialState":false,"createdOn":1663850737197},"a-18":{"id":"a-18","title":"Moving Gallery","continuousParameterGroups":[{"id":"a-18-p","type":"SCROLL_PROGRESS","parameterLabel":"Scroll","continuousActionGroups":[{"keyframe":0,"actionItems":[{"id":"a-18-n","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".moving-gallery-top-grid","selectorGuids":["85354056-4fb1-7329-faab-4ea4923f4458"]},"xValue":0,"xUnit":"vw","yUnit":"PX","zUnit":"PX"}},{"id":"a-18-n-2","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".moving-gallery-bottom-grid","selectorGuids":["db465d31-c3e6-1748-a1dc-92aac139799b"]},"xValue":-20,"xUnit":"vw","yUnit":"PX","zUnit":"PX"}}]},{"keyframe":100,"actionItems":[{"id":"a-18-n-3","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".moving-gallery-top-grid","selectorGuids":["85354056-4fb1-7329-faab-4ea4923f4458"]},"xValue":-20,"xUnit":"vw","yUnit":"PX","zUnit":"PX"}},{"id":"a-18-n-4","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".moving-gallery-bottom-grid","selectorGuids":["db465d31-c3e6-1748-a1dc-92aac139799b"]},"xValue":0,"xUnit":"vw","yUnit":"PX","zUnit":"PX"}}]}]}],"createdOn":1658137438145},"a-19":{"id":"a-19","title":"Hamburger Menu / Tap Open 2","actionItemGroups":[{"actionItems":[{"id":"a-19-n","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":0}}]},{"actionItems":[{"id":"a-19-n-2","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"ease","duration":600,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":50}}]}],"useFirstGroupAsInitialState":true,"createdOn":1663850737197},"a-20":{"id":"a-20","title":"Hamburger Menu / Tap Close 2","actionItemGroups":[{"actionItems":[{"id":"a-20-n","actionTypeId":"PLUGIN_LOTTIE","config":{"delay":0,"easing":"ease","duration":600,"target":{"useEventTarget":"CHILDREN","selector":".udesly-lottie-animation","selectorGuids":["4d4275fd-fd85-0d66-408b-c515db71d136"]},"value":0}}]}],"useFirstGroupAsInitialState":false,"createdOn":1663850737197},"a-21":{"id":"a-21","title":"FAQ Open","actionItemGroups":[{"actionItems":[{"id":"a-21-n","actionTypeId":"STYLE_SIZE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"SIBLINGS","selector":".faq-answer","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead9"]},"heightValue":0,"widthUnit":"PX","heightUnit":"PX","locked":false}}]},{"actionItems":[{"id":"a-21-n-2","actionTypeId":"STYLE_SIZE","config":{"delay":0,"easing":"easeInOut","duration":300,"target":{"useEventTarget":"SIBLINGS","selector":".faq-answer","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead9"]},"heightValue":0,"widthUnit":"PX","heightUnit":"AUTO","locked":false}},{"id":"a-21-n-3","actionTypeId":"STYLE_SIZE","config":{"delay":0,"easing":"","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".faq-plus-l","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead0"]},"heightValue":0,"widthUnit":"PX","heightUnit":"%","locked":false}},{"id":"a-21-n-4","actionTypeId":"TRANSFORM_ROTATE","config":{"delay":0,"easing":"inOutBack","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".faq-plus-wrap","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead5"]},"zValue":180,"xUnit":"DEG","yUnit":"DEG","zUnit":"DEG"}}]}],"useFirstGroupAsInitialState":true,"createdOn":1543891276079},"a-22":{"id":"a-22","title":"FAQ Close","actionItemGroups":[{"actionItems":[{"id":"a-22-n","actionTypeId":"STYLE_SIZE","config":{"delay":0,"easing":"easeInOut","duration":300,"target":{"useEventTarget":"SIBLINGS","selector":".faq-answer","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead9"]},"heightValue":0,"widthUnit":"PX","heightUnit":"PX","locked":false}},{"id":"a-22-n-2","actionTypeId":"STYLE_SIZE","config":{"delay":0,"easing":"","duration":300,"target":{"useEventTarget":"CHILDREN","selector":".faq-plus-l","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead0"]},"heightValue":100,"widthUnit":"PX","heightUnit":"%","locked":false}},{"id":"a-22-n-3","actionTypeId":"TRANSFORM_ROTATE","config":{"delay":0,"easing":"inOutBack","duration":500,"target":{"useEventTarget":"CHILDREN","selector":".faq-plus-wrap","selectorGuids":["30d4fdba-e99a-cae8-d34d-9c6965c8ead5"]},"zValue":0,"xUnit":"DEG","yUnit":"DEG","zUnit":"DEG"}}]}],"useFirstGroupAsInitialState":false,"createdOn":1543891276079},"a-23":{"id":"a-23","title":"Navbar 2 [Open Menu] 2","actionItemGroups":[{"actionItems":[{"id":"a-23-n","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"inOutQuint","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".menu-icon2_line-top","selectorGuids":["0bcce111-33cb-5a39-c1cc-3f5bd7de9529"]},"yValue":8,"xUnit":"PX","yUnit":"px","zUnit":"PX"}},{"id":"a-23-n-2","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"inOutQuint","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".menu-icon2_line-bottom","selectorGuids":["0bcce111-33cb-5a39-c1cc-3f5bd7de9525"]},"yValue":-8,"xUnit":"PX","yUnit":"px","zUnit":"PX"}},{"id":"a-23-n-3","actionTypeId":"TRANSFORM_ROTATE","config":{"delay":0,"easing":"inOutQuint","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".menu-icon2_line-bottom","selectorGuids":["0bcce111-33cb-5a39-c1cc-3f5bd7de9525"]},"zValue":-45,"xUnit":"DEG","yUnit":"DEG","zUnit":"deg"}},{"id":"a-23-n-4","actionTypeId":"TRANSFORM_ROTATE","config":{"delay":0,"easing":"inOutQuint","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".menu-icon2_line-top","selectorGuids":["0bcce111-33cb-5a39-c1cc-3f5bd7de9529"]},"zValue":45,"xUnit":"DEG","yUnit":"DEG","zUnit":"deg"}},{"id":"a-23-n-5","actionTypeId":"STYLE_OPACITY","config":{"delay":0,"easing":"inOutQuint","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".menu-icon2_line-middle","selectorGuids":["0bcce111-33cb-5a39-c1cc-3f5bd7de9526"]},"value":0,"unit":""}}]}],"useFirstGroupAsInitialState":false,"createdOn":1626225663494},"a-24":{"id":"a-24","title":"Navbar 2 [Close Menu] 2","actionItemGroups":[{"actionItems":[{"id":"a-24-n","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"inOutQuint","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".menu-icon2_line-top","selectorGuids":["0bcce111-33cb-5a39-c1cc-3f5bd7de9529"]},"yValue":0,"xUnit":"PX","yUnit":"px","zUnit":"PX"}},{"id":"a-24-n-2","actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"inOutQuint","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".menu-icon2_line-bottom","selectorGuids":["0bcce111-33cb-5a39-c1cc-3f5bd7de9525"]},"yValue":0,"xUnit":"PX","yUnit":"px","zUnit":"PX"}},{"id":"a-24-n-3","actionTypeId":"TRANSFORM_ROTATE","config":{"delay":0,"easing":"inOutQuint","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".menu-icon2_line-bottom","selectorGuids":["0bcce111-33cb-5a39-c1cc-3f5bd7de9525"]},"zValue":0,"xUnit":"DEG","yUnit":"DEG","zUnit":"deg"}},{"id":"a-24-n-4","actionTypeId":"TRANSFORM_ROTATE","config":{"delay":0,"easing":"inOutQuint","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".menu-icon2_line-top","selectorGuids":["0bcce111-33cb-5a39-c1cc-3f5bd7de9529"]},"zValue":0,"xUnit":"DEG","yUnit":"DEG","zUnit":"deg"}},{"id":"a-24-n-5","actionTypeId":"STYLE_OPACITY","config":{"delay":0,"easing":"inOutQuint","duration":400,"target":{"useEventTarget":"CHILDREN","selector":".menu-icon2_line-middle","selectorGuids":["0bcce111-33cb-5a39-c1cc-3f5bd7de9526"]},"value":1,"unit":""}}]}],"useFirstGroupAsInitialState":false,"createdOn":1626226496146},"slideInTop":{"id":"slideInTop","useFirstGroupAsInitialState":true,"actionItemGroups":[{"actionItems":[{"actionTypeId":"STYLE_OPACITY","config":{"delay":0,"duration":0,"target":{"id":"N/A","appliesTo":"TRIGGER_ELEMENT","useEventTarget":true},"value":0}}]},{"actionItems":[{"actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"duration":0,"target":{"id":"N/A","appliesTo":"TRIGGER_ELEMENT","useEventTarget":true},"xValue":0,"yValue":-100,"xUnit":"PX","yUnit":"PX","zUnit":"PX"}}]},{"actionItems":[{"actionTypeId":"STYLE_OPACITY","config":{"delay":0,"easing":"outQuart","duration":1000,"target":{"id":"N/A","appliesTo":"TRIGGER_ELEMENT","useEventTarget":true},"value":1}},{"actionTypeId":"TRANSFORM_MOVE","config":{"delay":0,"easing":"outQuart","duration":1000,"target":{"id":"N/A","appliesTo":"TRIGGER_ELEMENT","useEventTarget":true},"xValue":0,"yValue":0,"xUnit":"PX","yUnit":"PX","zUnit":"PX"}}]}]}},"site":{"mediaQueries":[{"key":"main","min":992,"max":10000},{"key":"medium","min":768,"max":991},{"key":"small","min":480,"max":767},{"key":"tiny","min":0,"max":479}]}}
 );
