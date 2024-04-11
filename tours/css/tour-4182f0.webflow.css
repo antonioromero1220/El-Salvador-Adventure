@@ -1452,7 +1452,7 @@ a {
 .navbar_link {
   color: #fff;
   padding: .5rem 1rem;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 500;
 }
 
@@ -1473,8 +1473,8 @@ a {
   border-radius: .65rem;
   flex-direction: row;
   align-items: center;
-  padding: .75rem 1.5rem;
-  font-size: 16px;
+  padding: .75rem 1rem;
+  font-size: 14px;
   font-weight: 700;
   transition: all .2s;
   display: flex;
@@ -1543,7 +1543,7 @@ a {
 .bold-text-2 {
   color: #fff;
   font-family: Arial, Helvetica Neue, Helvetica, sans-serif;
-  font-size: 23px;
+  font-size: 16px;
 }
 
 .image-3 {
@@ -1583,7 +1583,7 @@ a {
 .navbar_link-copy {
   color: #fff;
   padding: .5rem 1rem;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 500;
 }
 
@@ -1824,6 +1824,10 @@ a {
 }
 
 @media screen and (min-width: 1440px) {
+  .navbar_link, .navbar_link-copy {
+    font-size: 16px;
+  }
+
   .section-testimonials1 {
     min-height: auto;
     padding-bottom: 4.6em;
@@ -1850,6 +1854,10 @@ a {
 
   .heading-5, .heading-6, .pricing-h1.faq-h2 {
     font-size: 48px;
+  }
+
+  .navbar_link, .navbar_link-copy {
+    font-size: 18px;
   }
 
   .paragraph-55 {
@@ -3151,5 +3159,3 @@ a {
     justify-self: start;
   }
 }
-
-
